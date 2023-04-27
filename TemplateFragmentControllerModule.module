@@ -1,0 +1,140 @@
+<?php namespace ProcessWire;
+
+class TemplateFragmentControllerModule extends WireData implements Module {
+	
+	public static function getModuleInfo() {
+		
+		return [
+			'title'			=>	__('Template Fragment Controller', __FILE__),
+			'summary'		=>	__('Allow retrieval and execution of template fragments when using Markup Regions', __FILE__),
+			'version'		=>	'0.0.1',
+			'autoload'		=>	true,
+			'singular'		=>	true
+		];
+		
+	}	
+	
+	public function init() {
+		
+		if(! $this->config->useMarkupRegions)
+			return;
+		
+		require_once('TemplateFragmentController.php');
+		
+		$this->addHookBefore('PageRender::renderPage', $this, 'getRenderPageReady', [ 'priority' => 99 ]);
+	}
+	
+	public function getRenderPageReady(HookEvent $event) {
+		
+		if(! $this->input->get->regions)
+			return;
+		
+		//$page = $event->object;
+		$page = $this->page;
+		$template = $page->template;
+		
+		if(! $page->template->filenameExists())
+			return;
+		
+		$config = $this->config;
+		
+		$fragmentDir = $config->paths->assets . 'fragments/' . $template->name . '/';
+		
+		// Clean up old fragment files
+		$this->files->rmdir($fragmentDir, true);
+		// Recreate fragment dir for this template
+		$this->files->mkdir($fragmentDir, true);
+		
+		$origModified = $template->modified;
+		$fileModified = filemtime($template->filename);
+		
+		if($fileModified > $origModified || $this->input->get->refresh) {
+			
+			$regions = $this->extractRegions($template);
+			
+			foreach($regions as $region) {
+				
+				$filePath = $fragmentDir . $region['pwid'] . '.php';
+				file_put_contents($filePath, '<?php namespace ProcessWire ?> ' . PHP_EOL . $region['html']);
+
+			}
+			
+		}
+		
+		if(is_array($this->input->get->regions))
+			$fragmentsToOutput = $this->input->get->regions;
+		else
+			$fragmentsToOutput = array_map(function($item) { return trim($item); }, explode(',', $this->input->get->regions));
+		
+		$controllerFilename = $config->paths->templates . '_' . $template->name . '.controller.php';
+		$ControllerClassname = "ProcessWire\\" . ucfirst($template->name) . 'Controller';
+		
+		$templateIncludePath = "{$config->paths->templates}";
+		$ret = require_once($templateIncludePath . '_' . $template->name . '.controller.php');
+		$controller = new $ControllerClassname();
+		
+		$output = [];
+		
+		foreach($fragmentsToOutput as $fragment) {
+			
+			$filePath = $fragmentDir . $fragment . '.php';
+			if(file_exists($filePath))
+				$output[$fragment] = wireRenderFile(
+					$filePath,
+					[
+						"controller"	=>	$controller
+					],
+					[
+						"allowedPaths" => [
+							$config->paths->templates,
+							$config->paths->modules,
+							$config->paths->siteModules,
+							$fragmentDir
+						]
+					]
+				);
+			else
+				$output[$fragment] = '<!-- fragment ' . $fragment . ' not found -->';
+			
+		}
+		
+		if($this->input->get->json) {
+			header('Content-Type: application/json');
+			echo json_encode($output);
+		} else
+			echo implode("\n", $output);
+		
+		exit;
+		
+	}
+	
+	public function extractRegions($tpl) {
+		
+		$tplFile = $tpl->filename();
+		
+		$inputContent = file_get_contents($tplFile);
+		
+		$inputContent = preg_replace('~^<\\?php\\s+namespace ProcessWire.*?\\b\\?>~ism', '', $inputContent, 1);
+		
+		$fragments = [];
+		
+		if(isset($this->markupRegions)) {
+			$markupRegions = $this->markupRegions;
+		} else {
+			$markupRegions = new WireMarkupRegions();
+			$this->wire($markupRegions);
+		}
+		
+		$htmlRegions = $markupRegions->stripRegions('<!--', $inputContent);
+		$selector = "[pw-action], id=";
+		$regions = $markupRegions->find($selector, $htmlRegions, array(
+			'verbose' => true,
+			'debugNote' => (isset($options['debugNote']) ? "$options[debugNote] => " : "") 
+		));
+
+		return $regions;
+		
+	}
+	
+	
+}

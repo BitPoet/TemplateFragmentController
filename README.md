@@ -50,14 +50,14 @@ Create your template controller site/templates/_myfirsttemplate.controller.php
 
 class MyfirsttemplateController extends TemplateFragmentController {
 
-	public function getContentData() {
+    public function getContentData() {
     // Just a mostly static example
-		return [
-			['name' => 'Hello'],
-			['name' => 'World'],
-			['name' => $this->page->name]
-		];
-	}
+	return [
+		['name' => 'Hello'],
+		['name' => 'World'],
+		['name' => $this->page->name]
+	];
+    }
 	
 }
 ```

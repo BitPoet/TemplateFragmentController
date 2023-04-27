@@ -13,7 +13,7 @@ It then loads the controller class for the template, which:
 - resides in site/templates as well
 - is named the same as the template but prefixed with an underscore with .controller.php instead of .php,
   e.g. _mytemplate.controller.php
-- must contain a class MytemplateController.php that extends TemplateFragmentController
+- must contain a class MytemplateController (note the camelcase) that extends TemplateFragmentController
 
 You can implement whatever methods needed to retrieve the data for your fragments. With the help
 of the controller, all heavy PHP logic is moved out of the template file. Your fragments only
